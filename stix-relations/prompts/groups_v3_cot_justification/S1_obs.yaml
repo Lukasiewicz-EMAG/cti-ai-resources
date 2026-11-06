@@ -1,0 +1,97 @@
+template: |
+  # Instructions:
+  You are a STIX 2.1 threat intelligence analyst. Every candidate below is a OBSERVABLE
+  candidate: one endpoint is a url, domain-name or ipv4-addr. Decide each one independently against the report_text.
+
+  Return a relationship only if the text supports it. Omit is strongly preferred in this
+  group: co-occurrence in an IOC table is not evidence. A spurious relationship is worse
+  than a miss here.
+
+  relationship_type MUST come from that candidate's candidate_labels. In this group the only
+  possible labels are: communicates-with, consists-of.
+  A flipped source/target is a separate candidate — never copy a label onto it.
+
+  Put short decisions in chain_of_thought as one short string for the whole list
+  (id:rule decision; ...). Each relationship object MUST include relation_id, source,
+  target, relationship_type, and justification ("<quote> - <note>").
+
+  ## Allowed type triples in this group (9; nothing outside this list is valid)
+
+      infrastructure   -> domain-name          communicates-with
+      infrastructure   -> domain-name          consists-of
+      infrastructure   -> ipv4-addr            communicates-with
+      infrastructure   -> ipv4-addr            consists-of
+      infrastructure   -> url                  communicates-with
+      infrastructure   -> url                  consists-of
+      malware          -> domain-name          communicates-with
+      malware          -> ipv4-addr            communicates-with
+      malware          -> url                  communicates-with
+
+  ## When an observable relationship exists
+
+  O1. STRUCTURAL OWNERSHIP -> consists-of.
+      A service entity consists-of an observable when the observable is a host BENEATH that
+      service's own domain. The test is structural, on the string itself: strip the leftmost
+      labels of the hostname and ask whether what remains is the service's own domain, or a
+      domain the report identifies as belonging to that service. If yes, that service owns it.
+      Apply this to EVERY host of that service, not only the first one you see, and assign
+      each host to exactly ONE owner — the service whose domain it sits under. A service
+      never owns a host under a different service's domain.
+      Randomly generated left-most labels are normal for abused SaaS and tunnelling
+      providers; the gibberish prefix does not weaken the ownership signal.
+      Never consists-of from a generic C2 / role hub.
+
+  O2. NAMED CONTACT ONLY -> communicates-with.
+      An entity relates to an observable only when a sentence names THAT entity contacting
+      THAT host: querying, resolving through, beaconing to, fetching from, exfiltrating to.
+      Entities named in the sentence, not every entity in the report.
+
+  ## Fan-out omits (apply even when both entities appear in the report)
+
+  - IOC lists: a comma-list or table of domains/urls/IPs is not evidence that every
+    malware, tool, or generic "C2" hub communicates-with each one.
+  - Generic C2 / role hub: an entity titled like "C2 (Command and Control)",
+    "Exfiltration endpoint", or "staging server" does NOT inherit every observable,
+    tunnel, or SaaS host in the report. No aggregate fan-out onto IOC hosts.
+  - Sibling channels: primary/backup/fallback C2 paths are not uses of each other and
+    do not transfer contacts across peers.
+  - Appearing in the same indicator table is never evidence.
+
+  Anything else is fan-out: omit.
+
+  # Few-shot examples
+
+  ## 1) Ownership, named contact, no aggregate IOC fan-out
+  Input:
+  {
+    "report_text": "SPINDRIFT resolves its current endpoint by querying a public ledger through rpc-gw.turso-edge.net. The operators also stood up tunnels, observed as 4kq2mz-brisk-otter.fastly-cdn.net and jw81hd-quiet-lark.fastly-cdn.net, and staged data in a managed database at nx77bq2.planetscale-db.net. HOLLOWJAW, deployed later in the same intrusion, was not observed contacting the ledger gateway.",
+    "candidate_relationships": [
+      {"relation_id": "ex1a", "source": "Fastly", "source_type": "infrastructure", "target": "4kq2mz-brisk-otter.fastly-cdn.net", "target_type": "url", "candidate_labels": ["consists-of", "communicates-with"]},
+      {"relation_id": "ex1b", "source": "Fastly", "source_type": "infrastructure", "target": "jw81hd-quiet-lark.fastly-cdn.net", "target_type": "url", "candidate_labels": ["consists-of", "communicates-with"]},
+      {"relation_id": "ex1c", "source": "PlanetScale", "source_type": "infrastructure", "target": "nx77bq2.planetscale-db.net", "target_type": "url", "candidate_labels": ["consists-of", "communicates-with"]},
+      {"relation_id": "ex1d", "source": "PlanetScale", "source_type": "infrastructure", "target": "4kq2mz-brisk-otter.fastly-cdn.net", "target_type": "url", "candidate_labels": ["consists-of", "communicates-with"]},
+      {"relation_id": "ex1e", "source": "Exfiltration endpoint", "source_type": "infrastructure", "target": "nx77bq2.planetscale-db.net", "target_type": "url", "candidate_labels": ["consists-of", "communicates-with"]},
+      {"relation_id": "ex1f", "source": "Exfiltration endpoint", "source_type": "infrastructure", "target": "jw81hd-quiet-lark.fastly-cdn.net", "target_type": "url", "candidate_labels": ["consists-of", "communicates-with"]},
+      {"relation_id": "ex1g", "source": "SPINDRIFT", "source_type": "malware", "target": "rpc-gw.turso-edge.net", "target_type": "domain-name", "candidate_labels": ["communicates-with"]},
+      {"relation_id": "ex1h", "source": "HOLLOWJAW", "source_type": "malware", "target": "rpc-gw.turso-edge.net", "target_type": "domain-name", "candidate_labels": ["communicates-with"]}
+    ]
+  }
+  Output:
+  {
+    "chain_of_thought": "ex1a,ex1b:O1 consists; ex1c:O1 consists; ex1d:omit; ex1e,ex1f:O2 hub fan-out omit; ex1g:O2 named contact; ex1h:omit",
+    "relationships": [
+      {"relation_id": "ex1a", "source": "Fastly", "target": "4kq2mz-brisk-otter.fastly-cdn.net", "relationship_type": "consists-of", "justification": "\"4kq2mz-brisk-otter.fastly-cdn.net\" - host sits under Fastly domain (O1)"},
+      {"relation_id": "ex1b", "source": "Fastly", "target": "jw81hd-quiet-lark.fastly-cdn.net", "relationship_type": "consists-of", "justification": "\"jw81hd-quiet-lark.fastly-cdn.net\" - host sits under Fastly domain (O1)"},
+      {"relation_id": "ex1c", "source": "PlanetScale", "target": "nx77bq2.planetscale-db.net", "relationship_type": "consists-of", "justification": "\"nx77bq2.planetscale-db.net\" - host sits under PlanetScale domain (O1)"},
+      {"relation_id": "ex1g", "source": "SPINDRIFT", "target": "rpc-gw.turso-edge.net", "relationship_type": "communicates-with", "justification": "\"SPINDRIFT resolves ... querying ... rpc-gw.turso-edge.net\" - named contact (O2)"}
+    ]
+  }
+
+  # Output:
+  {{
+    "chain_of_thought": "<one short string: id:rule decision; ...>",
+    "relationships": [{{"relation_id": "...", "source": "...", "target": "...",
+    "relationship_type": "...", "justification": "<quote> - <note>"}}]
+  }}
+
+  # Input (formatted as JSON data):

@@ -1,0 +1,68 @@
+# AZERG prompts closest to the ones from the article
+# separate mode is paper-faithful
+t3:
+  separate:
+    template: |
+      # Instruction:
+      You are a helpful threat intelligence analyst.
+      Your task is to identify if the source entity and the target entity in the provided text passage are semantically related. To help you, we provide all the possible relationship labels between the source and target entities. If any label applies to the relationship, answer YES. Otherwise, answer NO. Answer in the following format: <related>YES or NO</related>
+      # Input:
+      - Source Entity: [{src_title} ({src_type})]
+      - Target Entity: [{tgt_title} ({tgt_type})]
+      - Possible Relationship Labels: [{rel_labels}]
+      - Text Passage: [{text}]
+      # Response:
+
+  multi:
+    template: |
+      # Instruction:
+      You are a helpful threat intelligence analyst.
+      For EACH candidate pair below, identify if the source and target entities in the provided text passage are semantically related. Possible relationship labels are given per pair. If any label applies, answer YES. Otherwise, answer NO.
+      Return a valid JSON array of strings only. Each string must be either "YES" or "NO". Order must match the candidate pairs. Do not output anything except the JSON array.
+      # Text Passage
+      $text
+      # Candidate Pairs
+      $candidate_pairs_block
+      # Response (valid JSON array of "YES"/"NO")
+
+t4:
+  separate:
+    template: |
+      # Instruction:
+      You are a helpful threat intelligence analyst.
+      Your task is to identify the label of the relationship between the source entity and the target entity in the provided text passage.
+      To help you, we provide all the possible relationship labels between the source and target entities. Answer in the following format:
+      <label>Your chosen label</label>
+      # Input:
+      - Source Entity: [{src_title} ({src_type})]
+      - Target Entity: [{tgt_title} ({tgt_type})]
+      - Possible Relationship Labels: [{rel_labels}]
+      - Text Passage: [{text}]
+      # Response:
+
+  multi:
+    template: |
+      # Instruction:
+      You are a helpful threat intelligence analyst.
+      For each candidate pair below, identify the label of the relationship between the source entity and the target entity in the provided text passage. Only choose one label from the provided possible relationship labels.
+      Return STRICT JSON only. Do not skip any candidate pair.
+      Candidate pairs input schema:
+      [
+        {"relation_id": "<str>",
+        "src_id": "<str>", "src_title": "<str>", "src_type": "<str>",
+        "tgt_id": "<str>", "tgt_title": "<str>", "tgt_type": "<str>",
+        "labels": ["<str>", ...]}
+      ]
+      Output schema:
+      [
+        {"relation_id": "<str>",
+        "src_id": "<str>",
+        "tgt_id": "<str>",
+        "label": "<str>"}
+      ]
+      # Input
+      - Text Passage:
+      [{text}]
+      - Candidate Pairs:
+      [$candidate_pairs_block]
+      # Response (JSON only)

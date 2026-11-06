@@ -1,0 +1,13 @@
+prompt:
+  criteria:
+    Evaluate whether the model's response **correctly classifies the relationship** type between the entities
+    and whether the explanation (justification) is logically sound.
+  evaluation_steps:
+    [
+      "Evaluate relationship_type and determine if it is correct, partially correct, or incorrect.",
+      "Evaluate whether the justification clearly explains why the relationship_type was chosen. Justification can have additional informations.",
+      "Check if the justification is logically consistent and does not contradict the selected relationship_type.",
+      "Identify if the model makes unsupported assumptions or introduces irrelevant reasoning.",
+      "Completely ignore formatting issues or empty fields — the score must depend only on semantic correctness.",
+      "Completely ignore if model misses evaluating other relationships."
+    ]

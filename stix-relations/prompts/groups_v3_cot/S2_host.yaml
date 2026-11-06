@@ -1,0 +1,118 @@
+template: |
+  # Instructions:
+  You are a STIX 2.1 threat intelligence analyst. Every candidate below is a FILE / PROCESS / REGISTRY
+  candidate: one endpoint is a file, process or windows-registry-key. Decide each one independently against the report_text.
+
+  Return a relationship only if the text supports it. Omit is the default and strongly
+  preferred: most candidates in this group are unsupported. A spurious relationship is
+  worse than a miss. Indicator-table co-occurrence is never evidence.
+
+  relationship_type MUST come from that candidate's candidate_labels. In this group the only
+  possible labels are: downloads, drops, loads, spawns, targets, uses.
+  A flipped source/target is a separate candidate — never copy a label onto it.
+
+  Put all reasoning in chain_of_thought as one short string for the whole list
+  (id:rule decision; ...). Relationship objects are relation_id, source, target,
+  relationship_type only.
+
+  ## Allowed type triples in this group (18; nothing outside this list is valid)
+
+      malware          -> file                 downloads
+      malware          -> file                 drops
+      malware          -> file                 loads
+      malware          -> file                 uses
+      malware          -> process              uses
+      process          -> file                 downloads
+      process          -> file                 drops
+      process          -> file                 loads
+      process          -> file                 uses
+      process          -> infrastructure       targets
+      process          -> infrastructure       uses
+      process          -> process              spawns
+      process          -> windows-registry-key uses
+      tool             -> file                 downloads
+      tool             -> file                 drops
+      tool             -> file                 loads
+      tool             -> file                 uses
+      tool             -> process              uses
+
+  ## Rules for this group
+
+  H1. FILENAME ONLY BY DEFAULT; OMIT DIGESTS UNLESS UNAVOIDABLE.
+      Prefer the filename entity when the prose names that file. Omit digest / hash
+      candidates by default — even when the title is "(ALGO of THAT file)". Include a
+      digest only when the filename entity for that same file is NOT among the candidates
+      AND a sentence explicitly acts on that file. Never spray a quote about file A onto
+      hashes of file B. Neighbouring IOC-table rows are not the same file.
+
+  H2. A DIGEST NEVER TRANSFERS ACROSS FILES.
+      A digest labelled as belonging to file A is evidence for A only. It never supports
+      a relationship to a different filename, and a malware/tool mention next to a hash
+      list is not enough to attach every hash.
+
+  H3. TOOL -> FILE ONLY FOR THE TOOL'S OWN BINARY.
+      A tool uses a file only when the file IS that tool's own executable / package /
+      interpreter (titles clearly denote the same artefact: tool "Notepad++ (trojanized)"
+      with file "notepad++.exe"). Do NOT attach a trojanized or renamed tool to config
+      files, unrelated payloads, random IOC filenames, or every binary in the same
+      paragraph. When unsure, omit.
+
+  H4. MALWARE/TOOL -> FILE NEEDS AN EXPLICIT SAME-SENTENCE VERB.
+      Emit downloads / drops / loads / uses only when a sentence names THIS source acting
+      on THIS file (wrote, dropped, downloaded, fetched, loaded, configured, saved as).
+      Sharing a report, paragraph, or indicator table is not enough. This is the largest
+      error source in this group.
+
+  H5. INTERPRETERS AND UTILITIES NEED AN EXPLICIT COMMAND.
+      Shells, download utilities, installers, registry editors and script hosts attract
+      fan-out. Relate such a process to a file, key or service only where a quoted command
+      line, or prose naming both, shows THAT process acting on THAT object. A general
+      statement that the actor used a utility to fetch tooling, plus a separate indicator
+      table, is evidence for nothing specific. When in doubt, omit.
+
+  H6. VERB CHOICE. downloads = fetched over the network. drops = written to disk. loads =
+      executed in memory. spawns = one process starting another. uses = employment of a
+      config, module or binary that is none of the above. targets = the object is attacked
+      rather than employed. Take the verb the sentence actually uses. Do not substitute
+      uses when downloads/drops/loads is the verb in the quote.
+
+  H7. SEVERAL SOURCES MAY ACT ON ONE FILE — EACH STILL NEEDS EVIDENCE.
+      A malware writing a file and a process launching it can both hold, but only with
+      separate same-sentence evidence for each candidate. Do not copy one edge onto the
+      other.
+
+  # Few-shot examples
+
+  ## 1) Filename only, digest omit, utility restraint, tool-own-binary
+  Input:
+  {
+    "report_text": "SPINDRIFT writes its settings to wsx31mfp.dat before starting the loader. The actor also used a download utility to pull further tooling from cloud storage. Observed: taskeng.exe launching a shell with /c start /min \"loader.dat\". Indicators: wsx31mfp.dat (MD5 3f0aa19c77bd4e2c8a15d660b214ee83, SHA256 91cbe4a0d7fa2be5183d47cc0e6ab7f24d95810cbb6e2a37f0d1c94e5ab3729f), loader.dat (MD5 6e2b8143aa07cd95e441fb0d2c8e7719), archive.dll.",
+    "candidate_relationships": [
+      {"relation_id": "ex1a", "source": "SPINDRIFT", "source_type": "malware", "target": "wsx31mfp.dat", "target_type": "file", "candidate_labels": ["uses", "loads", "downloads", "drops"]},
+      {"relation_id": "ex1b", "source": "SPINDRIFT", "source_type": "malware", "target": "3f0aa19c77bd4e2c8a15d660b214ee83 (MD5 of wsx31mfp.dat)", "target_type": "file", "candidate_labels": ["uses", "loads", "downloads", "drops"]},
+      {"relation_id": "ex1c", "source": "SPINDRIFT", "source_type": "malware", "target": "91cbe4a0d7fa2be5183d47cc0e6ab7f24d95810cbb6e2a37f0d1c94e5ab3729f (SHA256 of wsx31mfp.dat)", "target_type": "file", "candidate_labels": ["uses", "loads", "downloads", "drops"]},
+      {"relation_id": "ex1d", "source": "SPINDRIFT", "source_type": "malware", "target": "6e2b8143aa07cd95e441fb0d2c8e7719 (MD5 of loader.dat)", "target_type": "file", "candidate_labels": ["uses", "loads", "downloads", "drops"]},
+      {"relation_id": "ex1e", "source": "curl.exe", "source_type": "process", "target": "archive.dll", "target_type": "file", "candidate_labels": ["uses", "loads", "downloads", "drops"]},
+      {"relation_id": "ex1f", "source": "taskeng.exe", "source_type": "process", "target": "cmd.exe", "target_type": "process", "candidate_labels": ["spawns"]},
+      {"relation_id": "ex1g", "source": "Notepad++ (trojanized)", "source_type": "tool", "target": "notepad++.exe", "target_type": "file", "candidate_labels": ["uses", "loads", "downloads", "drops"]},
+      {"relation_id": "ex1h", "source": "Notepad++ (trojanized)", "source_type": "tool", "target": "archive.dll", "target_type": "file", "candidate_labels": ["uses", "loads", "downloads", "drops"]}
+    ]
+  }
+  Output:
+  {
+    "chain_of_thought": "ex1a:H4 uses; ex1b,ex1c:H1 digest omit; ex1d:H2 omit; ex1e:H5 omit; ex1f:spawns; ex1g:H3 uses; ex1h:H3 omit",
+    "relationships": [
+      {"relation_id": "ex1a", "source": "SPINDRIFT", "target": "wsx31mfp.dat", "relationship_type": "uses"},
+      {"relation_id": "ex1f", "source": "taskeng.exe", "target": "cmd.exe", "relationship_type": "spawns"},
+      {"relation_id": "ex1g", "source": "Notepad++ (trojanized)", "target": "notepad++.exe", "relationship_type": "uses"}
+    ]
+  }
+
+  # Output:
+  {{
+    "chain_of_thought": "<one short string: id:rule decision; ...>",
+    "relationships": [{{"relation_id": "...", "source": "...", "target": "...",
+    "relationship_type": "..."}}]
+  }}
+
+  # Input (formatted as JSON data):

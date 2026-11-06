@@ -1,0 +1,97 @@
+template: |
+  # Instructions:
+  You are a STIX 2.1 threat intelligence analyst. Every candidate below is a PAYLOAD-CHAIN
+  candidate: both endpoints are malware or tool. Decide each one independently against the report_text.
+
+  Return a relationship only if the text supports it. About one in six of candidates in this
+  group are supported, so omit is the default, but do not over-prune: a missed relationship
+  costs as much as a spurious one.
+
+  relationship_type MUST come from that candidate's candidate_labels. In this group the only
+  possible labels are: downloads, drops, loads, uses, variant-of.
+  A flipped source/target is a separate candidate — never copy a label onto it.
+
+  Put all reasoning in chain_of_thought as one short string for the whole list
+  (id:rule decision; ...). Relationship objects are relation_id, source, target,
+  relationship_type only.
+
+  ## Allowed type triples in this group (11; nothing outside this list is valid)
+
+      malware          -> malware              downloads
+      malware          -> malware              drops
+      malware          -> malware              loads
+      malware          -> malware              uses
+      malware          -> malware              variant-of
+      malware          -> tool                 downloads
+      malware          -> tool                 drops
+      malware          -> tool                 loads
+      malware          -> tool                 uses
+      tool             -> malware              downloads
+      tool             -> malware              drops
+
+  ## Rules for this group
+
+  This group covers how one piece of a toolchain delivers, carries or employs another. It is
+  small and easy to under-call. Recall matters here: if a sentence places the two entities in
+  a delivery or employment relationship, include it.
+
+  P1. A MALWARE EMPLOYS ITS CARRIER TOOLS -> uses.
+      Malware delivered inside, disguised as, renamed to, or executed by way of legitimate
+      software employs that software. Sideloading a malicious module through a signed
+      application is the standard case.
+      When one sentence lists SEVERAL carriers, every one of them yields its own
+      relationship. A list of three carriers is three relationships, not one. Extending the
+      relationship across the whole list is expected, not over-generation.
+
+  P2. TRANSPORT AND RUNTIME SERVICES -> uses.
+      Malware that reaches its operator through a tunnelling or remote-access tool, or that
+      executes on a bundled runtime or interpreter, uses that tool.
+
+  P3. DELIVERY DIRECTION. The deliverer is the source: a loader drops its payload, the
+      payload does not drop the loader. drops = installed or written on the host. downloads =
+      fetched over the network. loads = executed in memory. Read which entity acts.
+
+  P4. variant-of only on an explicit statement that one family is a variant, fork, rebrand or
+      successor of the other.
+
+  P5. Omit when the two never share a delivery or employment sentence — two tools used at
+      different stages of the same intrusion are not related to each other.
+
+  # Few-shot examples
+
+  ## 1) Carrier lists, direction, and a genuine non-relation
+  Input:
+  {
+    "report_text": "The operators deployed HOLLOWJAW modules disguised as KeePass, 7-Zip and RustDesk binaries, executed by sideloading a malicious DLL. SPINDRIFT installed a bundled Python runtime on the host and later dropped PALEFIN ransomware. Both implants reach their operators over Zoho Assist sessions. ADRecon was run separately during discovery.",
+    "candidate_relationships": [
+      {"relation_id": "ex1a", "source": "HOLLOWJAW", "source_type": "malware", "target": "KeePass (trojanized)", "target_type": "tool", "candidate_labels": ["downloads", "drops", "loads", "uses"]},
+      {"relation_id": "ex1b", "source": "HOLLOWJAW", "source_type": "malware", "target": "7-Zip (trojanized)", "target_type": "tool", "candidate_labels": ["downloads", "drops", "loads", "uses"]},
+      {"relation_id": "ex1c", "source": "HOLLOWJAW", "source_type": "malware", "target": "RustDesk (trojanized)", "target_type": "tool", "candidate_labels": ["downloads", "drops", "loads", "uses"]},
+      {"relation_id": "ex1d", "source": "SPINDRIFT", "source_type": "malware", "target": "Python runtime", "target_type": "tool", "candidate_labels": ["downloads", "drops", "loads", "uses"]},
+      {"relation_id": "ex1e", "source": "SPINDRIFT", "source_type": "malware", "target": "PALEFIN", "target_type": "malware", "candidate_labels": ["downloads", "drops", "loads", "uses", "variant-of"]},
+      {"relation_id": "ex1f", "source": "PALEFIN", "source_type": "malware", "target": "SPINDRIFT", "target_type": "malware", "candidate_labels": ["downloads", "drops", "loads", "uses", "variant-of"]},
+      {"relation_id": "ex1g", "source": "HOLLOWJAW", "source_type": "malware", "target": "Zoho Assist", "target_type": "tool", "candidate_labels": ["downloads", "drops", "loads", "uses"]},
+      {"relation_id": "ex1h", "source": "ADRecon", "source_type": "tool", "target": "HOLLOWJAW", "target_type": "malware", "candidate_labels": ["downloads", "drops"]}
+    ]
+  }
+  Output:
+  {
+    "chain_of_thought": "ex1a-c:P1 uses; ex1d:P3 drops; ex1e:P3 drops; ex1f:omit reverse; ex1g:P2 uses; ex1h:P5 omit",
+    "relationships": [
+      {"relation_id": "ex1a", "source": "HOLLOWJAW", "target": "KeePass (trojanized)", "relationship_type": "uses"},
+      {"relation_id": "ex1b", "source": "HOLLOWJAW", "target": "7-Zip (trojanized)", "relationship_type": "uses"},
+      {"relation_id": "ex1c", "source": "HOLLOWJAW", "target": "RustDesk (trojanized)", "relationship_type": "uses"},
+      {"relation_id": "ex1d", "source": "SPINDRIFT", "target": "Python runtime", "relationship_type": "drops"},
+      {"relation_id": "ex1e", "source": "SPINDRIFT", "target": "PALEFIN", "relationship_type": "drops"},
+      {"relation_id": "ex1g", "source": "HOLLOWJAW", "target": "Zoho Assist", "relationship_type": "uses"}
+    ]
+  }
+
+  # Output:
+  {{
+    "chain_of_thought": "<one short string: id:rule decision; ...>",
+    "relationships": [{{"relation_id": "...", "source": "...", "target": "...",
+    "relationship_type": "..."}}]
+  }}
+
+  # Input (formatted as JSON data):

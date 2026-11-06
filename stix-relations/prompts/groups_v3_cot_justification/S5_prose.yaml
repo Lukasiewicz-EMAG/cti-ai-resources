@@ -1,0 +1,135 @@
+template: |
+  # Instructions:
+  You are a STIX 2.1 threat intelligence analyst. Every candidate below is a ACTOR / TECHNIQUE
+  candidate: the pair involves an attack-pattern, threat-actor, intrusion-set, campaign, identity, location or vulnerability. Decide each one independently against the report_text.
+
+  Return a relationship only if the text supports it. About one in four of candidates in this
+  group are supported, so omit is the default, but do not over-prune on CRITICAL targets.
+  Prefer precision on technique->tool and actor-hub spray.
+
+  relationship_type MUST come from that candidate's candidate_labels. In this group the only
+  possible labels are: attributed-to, targets, uses.
+  A flipped source/target is a separate candidate — never copy a label onto it.
+
+  Put short decisions in chain_of_thought as one short string for the whole list
+  (id:rule decision; ...). Each relationship object MUST include relation_id, source,
+  target, relationship_type, and justification ("<quote> - <note>").
+
+  ## Allowed type triples in this group (34; nothing outside this list is valid)
+
+      attack-pattern   -> identity             targets [CRITICAL]
+      attack-pattern   -> location             targets [CRITICAL]
+      attack-pattern   -> malware              uses
+      attack-pattern   -> tool                 uses
+      attack-pattern   -> vulnerability        targets [CRITICAL]
+      campaign         -> attack-pattern       uses
+      campaign         -> identity             targets [CRITICAL]
+      campaign         -> intrusion-set        attributed-to
+      campaign         -> location             targets [CRITICAL]
+      campaign         -> malware              uses
+      campaign         -> threat-actor         attributed-to
+      campaign         -> tool                 uses
+      campaign         -> vulnerability        targets [CRITICAL]
+      intrusion-set    -> attack-pattern       uses
+      intrusion-set    -> identity             targets [CRITICAL]
+      intrusion-set    -> location             targets [CRITICAL]
+      intrusion-set    -> malware              uses
+      intrusion-set    -> threat-actor         attributed-to
+      intrusion-set    -> tool                 uses
+      intrusion-set    -> vulnerability        targets [CRITICAL]
+      malware          -> attack-pattern       uses
+      malware          -> identity             targets [CRITICAL]
+      malware          -> location             targets [CRITICAL]
+      malware          -> vulnerability        targets [CRITICAL]
+      threat-actor     -> attack-pattern       uses
+      threat-actor     -> identity             attributed-to
+      threat-actor     -> identity             targets [CRITICAL]
+      threat-actor     -> location             targets [CRITICAL]
+      threat-actor     -> malware              uses
+      threat-actor     -> tool                 uses
+      threat-actor     -> vulnerability        targets [CRITICAL]
+      tool             -> identity             targets [CRITICAL]
+      tool             -> location             targets [CRITICAL]
+      tool             -> vulnerability        targets [CRITICAL]
+
+  ## Priority
+  Relationships marked [CRITICAL] above are the highest-value output of this pipeline. Every
+  one of them carries the label targets: the target is the VICTIM or the OBJECT OF THE ATTACK
+  — an organisation, a sector, a region, a vulnerability, or a device/system being attacked.
+  Do not fall back on uses for these. If the sentence describes attacking, scanning, probing
+  or victimising the target rather than employing it as a resource, the label is targets.
+
+  ## Rules for this group
+
+  There are no structural shortcuts here - every decision comes from reading a sentence.
+
+  T1. A TECHNIQUE EMPLOYS A TOOL only when the sentence states the technique was carried out
+      via, with, or through that tool. Sharing a paragraph is not enough, and neither is
+      standing next to it in a narrative sequence of steps. This is the largest error source
+      in this group.
+
+  T2. A TECHNIQUE DOES NOT EMPLOY WHAT PERFORMS IT.
+      When the text says something was executed via, achieved through, or accomplished by
+      means of a technique, the actor or malware employs the technique - not the reverse.
+      Omit the technique -> malware direction unless the sentence genuinely reverses it.
+
+  T3. ACTORS EMPLOY THEIR CAPABILITIES -> uses, when the text attributes a malware, tool or
+      technique to that actor, campaign or intrusion-set. Do not attach every later
+      kill-chain tool to a named actor just because both appear in the report.
+
+  T4. targets - the CRITICAL label of this group. Use it when the target is the VICTIM or
+      the OBJECT of the attack: an organisation, sector or individual (identity), a country
+      or region (location), or a weakness being exploited (vulnerability). For those three
+      target types uses is not a legal label at all, so there is nothing to fall back on -
+      a sentence naming who was hit, where, or which weakness was abused is sufficient.
+
+  T5. attributed-to for an explicit attribution of a campaign or intrusion-set to an actor or
+      group: linked to, attributed to, operated by, tracked as the work of.
+
+  T6. HUB CHECK. Actors and techniques are named constantly and attract every tool in the
+      report. Before including, ask whether the same sentence would equally justify swapping
+      the target for another entity from the same paragraph. If yes, omit. Apply this
+      especially to generic unnamed actors and broad technique labels: do not attach every
+      later-stage tool or implant to the technique name unless the sentence pairs them.
+
+  T7. TECHNIQUE SPONGE. An attack-pattern uses a tool/malware only when the sentence says
+      THAT technique is carried out with THAT tool. Narrative proximity in a kill-chain
+      list is not enough.
+
+  # Few-shot examples
+
+  ## 1) Technique evidence, direction, victims
+  Input:
+  {
+    "report_text": "For lateral movement the operators performed LSASS credential dumping using GLASSHOOK. ADRecon was run separately to enumerate the directory. HOLLOWJAW modules were executed by sideloading a malicious DLL. SILVER CORMORANT has been observed deploying HOLLOWJAW against logistics operators in Scandinavia, exploiting CVE-2024-31982 for initial access.",
+    "candidate_relationships": [
+      {"relation_id": "ex1a", "source": "LSASS credential dumping", "source_type": "attack-pattern", "target": "GLASSHOOK", "target_type": "tool", "candidate_labels": ["uses"]},
+      {"relation_id": "ex1b", "source": "LSASS credential dumping", "source_type": "attack-pattern", "target": "ADRecon", "target_type": "tool", "candidate_labels": ["uses"]},
+      {"relation_id": "ex1c", "source": "DLL sideloading", "source_type": "attack-pattern", "target": "HOLLOWJAW", "target_type": "malware", "candidate_labels": ["uses"]},
+      {"relation_id": "ex1d", "source": "SILVER CORMORANT", "source_type": "intrusion-set", "target": "HOLLOWJAW", "target_type": "malware", "candidate_labels": ["uses"]},
+      {"relation_id": "ex1e", "source": "SILVER CORMORANT", "source_type": "intrusion-set", "target": "logistics operators", "target_type": "identity", "candidate_labels": ["targets"]},
+      {"relation_id": "ex1f", "source": "SILVER CORMORANT", "source_type": "intrusion-set", "target": "Scandinavia", "target_type": "location", "candidate_labels": ["targets"]},
+      {"relation_id": "ex1g", "source": "SILVER CORMORANT", "source_type": "intrusion-set", "target": "CVE-2024-31982", "target_type": "vulnerability", "candidate_labels": ["targets"]},
+      {"relation_id": "ex1h", "source": "SILVER CORMORANT", "source_type": "intrusion-set", "target": "GLASSHOOK", "target_type": "tool", "candidate_labels": ["uses"]}
+    ]
+  }
+  Output:
+  {
+    "chain_of_thought": "ex1a:T1 uses; ex1b:T1 omit; ex1c:T2/T7 omit; ex1d:T3 uses; ex1e-g:T4 targets; ex1h:T6 omit",
+    "relationships": [
+      {"relation_id": "ex1a", "source": "LSASS credential dumping", "target": "GLASSHOOK", "relationship_type": "uses", "justification": "\"LSASS credential dumping using GLASSHOOK\" - technique carried out with tool (T1)"},
+      {"relation_id": "ex1d", "source": "SILVER CORMORANT", "target": "HOLLOWJAW", "relationship_type": "uses", "justification": "\"SILVER CORMORANT has been observed deploying HOLLOWJAW\" - actor employs malware (T3)"},
+      {"relation_id": "ex1e", "source": "SILVER CORMORANT", "target": "logistics operators", "relationship_type": "targets", "justification": "\"against logistics operators\" - identity is victim (T4)"},
+      {"relation_id": "ex1f", "source": "SILVER CORMORANT", "target": "Scandinavia", "relationship_type": "targets", "justification": "\"in Scandinavia\" - location is victim geography (T4)"},
+      {"relation_id": "ex1g", "source": "SILVER CORMORANT", "target": "CVE-2024-31982", "relationship_type": "targets", "justification": "\"exploiting CVE-2024-31982\" - vulnerability is attack object (T4)"}
+    ]
+  }
+
+  # Output:
+  {{
+    "chain_of_thought": "<one short string: id:rule decision; ...>",
+    "relationships": [{{"relation_id": "...", "source": "...", "target": "...",
+    "relationship_type": "...", "justification": "<quote> - <note>"}}]
+  }}
+
+  # Input (formatted as JSON data):
