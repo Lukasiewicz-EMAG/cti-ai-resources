@@ -10,25 +10,27 @@ CTI-RelEx is a single-stage approach in which a large language model (LLM) joint
 
 ```
 stix-relations/
-├── data/                                   # 9 expert-annotated report fragments
+├── data/                                     # 9 expert-annotated report fragments
 │   ├── rep_2a740ecf.json
 │   ├── ...
 │   └── rep_eae8e825.json
 └── prompts/
-    ├── groups_v3_cot/                      # single-stage group prompts, no justification field
+    ├── groups_v3_cot/                        # single-stage group prompts, no justification field
     │   ├── S1_obs.yaml
     │   ├── S2_host.yaml
     │   ├── S3_payload.yaml
     │   ├── S4_infra.yaml
     │   └── S5_prose.yaml
-    ├── groups_v3_cot_justification/        # the same prompts, with a quote-based justification per relationship
+    ├── groups_v3_cot_justification/          # the same prompts, with a quote-based justification per relationship
     │   └── S1_obs.yaml ... S5_prose.yaml
-    ├── azerg_prompts_paper.yaml            # AZERG baseline prompts (T3, T4)
-    ├── geval_confidence_score.yaml         # G-Eval "Correctness" metric for the judge model
-    └── geval_confidence_score_no_think.yaml# the same metric with the Qwen3 /no_think switch
+    ├── azerg_prompts_paper.yaml              # AZERG baseline prompts (T3, T4)
+    ├── geval_confidence_score.yaml           # G-Eval "Correctness" metric for the judge model
+    └── geval_confidence_score_no_think.yaml  # the same metric with the Qwen3 /no_think switch
 ```
 
-## Source reports
+## Data
+
+### Source reports
 
 The evaluation set was built from two publicly available CTI reports. They come from different sources, describe different domains (industrial control systems vs. enterprise intrusion and ransomware) and require different depths of technical expertise. Each report was manually divided into contextually complete fragments.
 
@@ -38,8 +40,6 @@ The evaluation set was built from two publicly available CTI reports. They come 
 | [Flash Alert: EtherRat and TukTuk C2 End in The Gentleman Ransomware](https://thedfirreport.com/2026/05/11/flash-alert-etherrat-and-tuktuk-c2-end-in-the-gentleman-ransomware/) (11 May 2026) | The DFIR Report | `rep_2a740ecf`, `rep_3ded5086`, `rep_687c7882`, `rep_9691ae93`, `rep_eae8e825` | 174 |
 
 The report text in the data files is reproduced from these publications for research purposes. All rights to the original text remain with their publishers.
-
-## Data
 
 ### Annotation procedure
 
@@ -102,8 +102,10 @@ A relationship (`"type": "relation"`) links two entities. The `key` field holds 
 {
   "id": "a25506321e78",
   "data": {
-    "source": "ent_177229e8", "source_type": "infrastructure",
-    "target": "ent_d1056fb9", "target_type": "infrastructure",
+    "source": "ent_177229e8", 
+    "source_type": "infrastructure",
+    "target": "ent_d1056fb9", 
+    "target_type": "infrastructure",
     "key": "uses",
     "type": "relation"
   },
@@ -139,3 +141,9 @@ These files define the `criteria` and `evaluation_steps` of a custom G-Eval metr
 ## Acknowledgements
 
 Project is co-funded by the European Union under Grant Agreement No. 101190156 and is supported by the European Cybersecurity Competence Centre. The project received funding from the Ministry of Science and Higher Education in Poland.
+
+## License
+
+This directory is released under the Apache License 2.0 (see `LICENSE` in the repository root).
+
+The report text included in `data/` is reproduced from the publicly available source reports listed above for research purposes, with full attribution. Copyright in that text remains with its publishers (© Mandiant / Google; © The DFIR Report). If you are a rights holder and want the text removed, please open an issue or contact us, and we will replace it with references to the original publication.
